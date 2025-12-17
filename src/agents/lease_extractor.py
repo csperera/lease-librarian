@@ -14,11 +14,11 @@ Key Features:
 """
 
 import time
-from typing import Optional
+from typing import Optional, Any
 
-from langchain.chains import LLMChain
-from langchain.output_parsers import PydanticOutputParser
-from langchain.prompts import PromptTemplate
+from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import RunnableSequence
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
@@ -112,7 +112,7 @@ Extract all amendment information following the schema above.
 
 class LeaseExtractorAgent:
     """
-    LLMChain-based agent for extracting structured lease data.
+    LCEL-based agent for extracting structured lease data.
     
     Uses Pydantic output parsing to ensure extracted data conforms
     to the defined schemas with validation.
@@ -143,8 +143,8 @@ class LeaseExtractorAgent:
         self.verbose = verbose
         
         self._llm: Optional[ChatOpenAI] = None
-        self._lease_chain: Optional[LLMChain] = None
-        self._amendment_chain: Optional[LLMChain] = None
+        self._lease_chain: Optional[RunnableSequence] = None
+        self._amendment_chain: Optional[RunnableSequence] = None
         
         # Output parsers
         self._lease_parser = PydanticOutputParser(pydantic_object=Lease)
@@ -161,51 +161,43 @@ class LeaseExtractorAgent:
             )
         return self._llm
     
-    def _build_lease_chain(self) -> LLMChain:
+    def _build_lease_chain(self) -> RunnableSequence:
         """
-        Build the LLMChain for lease extraction.
+        Build the LCEL chain for lease extraction.
         
         Returns:
-            Configured LLMChain for base lease extraction
+            Configured runnable chain for base lease extraction
         """
         prompt = LEASE_EXTRACTION_PROMPT.partial(
             format_instructions=self._lease_parser.get_format_instructions()
         )
         
-        return LLMChain(
-            llm=self.llm,
-            prompt=prompt,
-            verbose=self.verbose,
-            output_parser=self._lease_parser,
-        )
+        # LCEL: prompt | llm | parser
+        return prompt | self.llm | self._lease_parser
     
-    def _build_amendment_chain(self) -> LLMChain:
+    def _build_amendment_chain(self) -> RunnableSequence:
         """
-        Build the LLMChain for amendment extraction.
+        Build the LCEL chain for amendment extraction.
         
         Returns:
-            Configured LLMChain for amendment extraction
+            Configured runnable chain for amendment extraction
         """
         prompt = AMENDMENT_EXTRACTION_PROMPT.partial(
             format_instructions=self._amendment_parser.get_format_instructions()
         )
         
-        return LLMChain(
-            llm=self.llm,
-            prompt=prompt,
-            verbose=self.verbose,
-            output_parser=self._amendment_parser,
-        )
+        # LCEL: prompt | llm | parser
+        return prompt | self.llm | self._amendment_parser
     
     @property
-    def lease_chain(self) -> LLMChain:
+    def lease_chain(self) -> RunnableSequence:
         """Get or create the lease extraction chain."""
         if self._lease_chain is None:
             self._lease_chain = self._build_lease_chain()
         return self._lease_chain
     
     @property
-    def amendment_chain(self) -> LLMChain:
+    def amendment_chain(self) -> RunnableSequence:
         """Get or create the amendment extraction chain."""
         if self._amendment_chain is None:
             self._amendment_chain = self._build_amendment_chain()

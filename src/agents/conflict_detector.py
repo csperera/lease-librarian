@@ -14,12 +14,12 @@ Key Features:
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any
 from uuid import uuid4
 
-from langchain.agents import AgentExecutor, create_openai_functions_agent
-from langchain.memory import ConversationBufferMemory
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langgraph.prebuilt import create_react_agent
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import Tool
 from langchain_openai import ChatOpenAI
 
@@ -151,14 +151,11 @@ class ConflictDetectorAgent:
         # Document memory
         self.document_memory = DocumentMemory()
         
-        # Conversation memory for the agent
-        self.conversation_memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True,
-        )
+        # Conversation history for the agent
+        self.chat_history = ChatMessageHistory()
         
         self._llm: Optional[ChatOpenAI] = None
-        self._agent_executor: Optional[AgentExecutor] = None
+        self._agent: Optional[Any] = None  # LangGraph compiled agent
     
     @property
     def llm(self) -> ChatOpenAI:
@@ -262,36 +259,27 @@ class ConflictDetectorAgent:
         # - Validate escalation math
         raise NotImplementedError("Calculation validation not yet implemented")
     
-    def _build_agent_executor(self) -> AgentExecutor:
+    def _build_agent(self) -> Any:
         """
-        Build the agent executor with memory.
+        Build the agent using LangGraph.
         
         Returns:
-            Configured AgentExecutor for conflict detection
+            Compiled LangGraph agent for conflict detection
         """
         tools = self._create_tools()
         
-        agent = create_openai_functions_agent(
-            llm=self.llm,
+        # LangGraph's create_react_agent returns a compiled runnable
+        return create_react_agent(
+            model=self.llm,
             tools=tools,
-            prompt=CONFLICT_DETECTOR_PROMPT,
-        )
-        
-        return AgentExecutor(
-            agent=agent,
-            tools=tools,
-            memory=self.conversation_memory,
-            verbose=self.verbose,
-            handle_parsing_errors=True,
-            max_iterations=15,
         )
     
     @property
-    def agent_executor(self) -> AgentExecutor:
-        """Get or create the agent executor."""
-        if self._agent_executor is None:
-            self._agent_executor = self._build_agent_executor()
-        return self._agent_executor
+    def agent(self) -> Any:
+        """Get or create the agent."""
+        if self._agent is None:
+            self._agent = self._build_agent()
+        return self._agent
     
     def add_lease(self, lease: Lease) -> None:
         """
@@ -428,7 +416,7 @@ class ConflictDetectorAgent:
     def clear_memory(self) -> None:
         """Clear all document and conversation memory."""
         self.document_memory.clear()
-        self.conversation_memory.clear()
+        self.chat_history.clear()
 
 
 # TODO: Add persistence for document memory (database/file storage)

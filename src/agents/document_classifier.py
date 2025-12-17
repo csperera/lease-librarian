@@ -17,10 +17,10 @@ Key Features:
 """
 
 from enum import Enum
-from typing import Optional
+from typing import Optional, Any
 
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain.prompts import PromptTemplate
+from langgraph.prebuilt import create_react_agent
+from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import Tool
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
@@ -131,7 +131,7 @@ class DocumentClassifierAgent:
         self.verbose = verbose
         
         self._llm: Optional[ChatOpenAI] = None
-        self._agent_executor: Optional[AgentExecutor] = None
+        self._agent: Optional[Any] = None  # LangGraph compiled agent
     
     @property
     def llm(self) -> ChatOpenAI:
@@ -213,35 +213,27 @@ class DocumentClassifierAgent:
         # Identify parties and their roles from signatures
         raise NotImplementedError("Signature block analysis not yet implemented")
     
-    def _build_agent_executor(self) -> AgentExecutor:
+    def _build_agent(self) -> Any:
         """
-        Build the ReAct agent executor.
+        Build the ReAct agent using LangGraph.
         
         Returns:
-            Configured AgentExecutor for document classification
+            Compiled LangGraph agent for document classification
         """
         tools = self._create_tools()
         
-        agent = create_react_agent(
-            llm=self.llm,
+        # LangGraph's create_react_agent returns a compiled runnable
+        return create_react_agent(
+            model=self.llm,
             tools=tools,
-            prompt=CLASSIFIER_PROMPT,
-        )
-        
-        return AgentExecutor(
-            agent=agent,
-            tools=tools,
-            verbose=self.verbose,
-            handle_parsing_errors=True,
-            max_iterations=10,
         )
     
     @property
-    def agent_executor(self) -> AgentExecutor:
-        """Get or create the agent executor."""
-        if self._agent_executor is None:
-            self._agent_executor = self._build_agent_executor()
-        return self._agent_executor
+    def agent(self) -> Any:
+        """Get or create the agent."""
+        if self._agent is None:
+            self._agent = self._build_agent()
+        return self._agent
     
     def classify(
         self,
