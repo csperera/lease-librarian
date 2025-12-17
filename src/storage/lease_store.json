@@ -1,0 +1,116 @@
+{
+  "100_innovation_dr.pdf": {
+    "id": "100_innovation_dr.pdf",
+    "property_address": "100 Innovation Drive, Dallas, TX",
+    "tenant": "Tech Startup Inc",
+    "landlord": "ABC Properties LLC",
+    "monthly_rent": 7500.0,
+    "lease_type": "triple_net",
+    "extracted_at": "2025-12-17T15:59:32.480987",
+    "full_lease_data": {
+      "document_id": "100_innovation_dr.pdf",
+      "lease_type": "triple_net",
+      "execution_date": null,
+      "landlord": {
+        "legal_name": "ABC Properties LLC",
+        "entity_type": null,
+        "address": null,
+        "contact_name": null,
+        "contact_email": null,
+        "contact_phone": null
+      },
+      "tenant": {
+        "legal_name": "Tech Startup Inc",
+        "entity_type": null,
+        "address": null,
+        "contact_name": null,
+        "contact_email": null,
+        "contact_phone": null
+      },
+      "guarantors": [],
+      "property_address": {
+        "street_address": "100 Innovation Drive",
+        "city": "Dallas",
+        "state": "TX",
+        "zip_code": "75201",
+        "country": "US"
+      },
+      "rentable_square_feet": "3000",
+      "usable_square_feet": null,
+      "property_use_type": "office",
+      "commencement_date": "2024-01-01",
+      "expiration_date": "2026-12-31",
+      "term_months": 36,
+      "base_rent_monthly": "7500",
+      "base_rent_annual": "90000",
+      "rent_per_sqft": "2.5",
+      "rent_escalations": [],
+      "security_deposit": null,
+      "operating_expenses": null,
+      "renewal_options": [],
+      "termination_rights": [],
+      "assignment_allowed": null,
+      "subletting_allowed": null,
+      "extracted_clauses": {},
+      "confidence_score": 1.0,
+      "extraction_notes": []
+    }
+  },
+  "200_commerce_st.pdf": {
+    "id": "200_commerce_st.pdf",
+    "property_address": "200 Commerce Street, Dallas, TX",
+    "tenant": "Retail Shop Co",
+    "landlord": "ABC Properties LLC",
+    "monthly_rent": 6000.0,
+    "lease_type": "modified_gross",
+    "extracted_at": "2025-12-17T15:59:46.829622",
+    "full_lease_data": {
+      "document_id": "200_commerce_st.pdf",
+      "lease_type": "modified_gross",
+      "execution_date": null,
+      "landlord": {
+        "legal_name": "ABC Properties LLC",
+        "entity_type": null,
+        "address": null,
+        "contact_name": null,
+        "contact_email": null,
+        "contact_phone": null
+      },
+      "tenant": {
+        "legal_name": "Retail Shop Co",
+        "entity_type": null,
+        "address": null,
+        "contact_name": null,
+        "contact_email": null,
+        "contact_phone": null
+      },
+      "guarantors": [],
+      "property_address": {
+        "street_address": "200 Commerce Street",
+        "city": "Dallas",
+        "state": "TX",
+        "zip_code": "75202",
+        "country": "US"
+      },
+      "rentable_square_feet": "2500",
+      "usable_square_feet": null,
+      "property_use_type": "retail",
+      "commencement_date": "2024-03-01",
+      "expiration_date": "2027-02-28",
+      "term_months": 36,
+      "base_rent_monthly": "6000",
+      "base_rent_annual": "72000",
+      "rent_per_sqft": "2.4",
+      "rent_escalations": [],
+      "security_deposit": null,
+      "operating_expenses": null,
+      "renewal_options": [],
+      "termination_rights": [],
+      "assignment_allowed": null,
+      "subletting_allowed": null,
+      "extracted_clauses": {},
+      "confidence_score": 1.0,
+      "extraction_notes": []
+    }
+  }
+}

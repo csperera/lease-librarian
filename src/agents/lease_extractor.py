@@ -70,11 +70,20 @@ Extract all available information from the following lease document.
 
 IMPORTANT GUIDELINES:
 1. Extract data exactly as it appears in the document
-2. Use null for fields that are not present or cannot be determined
-3. Include confidence notes for ambiguous extractions
-4. Normalize dates to YYYY-MM-DD format
-5. Normalize currency to numeric values without symbols
-6. Extract party names exactly as written (including legal entity types)
+2. For fields that are not present OR incomplete, use null (do not create partial objects)
+3. Never use the string "null" - either provide a real value or omit the field
+
+IMPORTANT RULES FOR NESTED OBJECTS:
+- If you don't have complete information for a nested object (like address), omit the entire object
+- NEVER create partial nested objects with null values
+- Example: If landlord address is unknown, use "address": null (not a partial address object)
+- Example: If you only know the property address city but not street, omit the entire property_address
+4. Include confidence notes for ambiguous extractions
+5. Normalize dates to YYYY-MM-DD format
+6. Normalize currency to numeric values without symbols
+7. Extract party names exactly as written (including legal entity types)
+- For lease_type: if unknown, use "net" as default
+- For property_use_type: if unknown, use "office" as default
 
 {format_instructions}
 

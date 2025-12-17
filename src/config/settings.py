@@ -47,7 +47,7 @@ class Settings(BaseSettings):
         description="OpenAI API key for LLM access"
     )
     openai_model: str = Field(
-        default="gpt-4-turbo-preview",
+        default="gpt-4o-mini",
         description="OpenAI model to use for agents"
     )
     openai_embedding_model: str = Field(
