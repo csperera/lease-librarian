@@ -179,7 +179,7 @@ MIT License - See LICENSE file for details
 
 ## 👤 Author
 
-**Cristian Perera**
+**Christian Perera**
 - Commercial real estate appraisal experience transitioning to ML Engineering
 - PropTech specialization
 - [LinkedIn](https://www.linkedin.com/in/christianperera/)
@@ -187,7 +187,6 @@ MIT License - See LICENSE file for details
 
 ## 🙏 Acknowledgments
 
-- Built with guidance from Claude (Anthropic)
 - Andrew Ng's Agentic AI course provided foundational patterns
 - PropTech industry pain points informed the design
 
