@@ -1,4 +1,4 @@
- # Lease Digitizer v1.0 Beta
+ # Lease Librarian v1.0 Beta
 
 **AI-Powered Commercial Lease Intelligence Platform**
 
