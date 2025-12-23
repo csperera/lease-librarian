@@ -4,6 +4,21 @@
 
 A production-grade full-stack application that uses LangChain multi-agent architecture to extract structured data from commercial real estate leases with 100% accuracy.
 
+# ⚠️ IMPORTANT NOTICE
+
+**This repository contains a demonstration implementation for portfolio and evaluation purposes.**
+
+The production system includes:
+- Proprietary extraction algorithms and prompt engineering
+- Optimized RAG implementation and chunking strategies  
+- Production-grade error handling and edge case management
+- Commercial deployment infrastructure
+
+**© 2025 Christian Perera. All Rights Reserved.**
+
+For commercial licensing, collaboration, or technical discussions: christian@wealthmind.ai
+
+---
 ## 🎯 Overview
 
 Lease Librarian solves a critical pain point in commercial real estate: property managers have filing cabinets full of paper leases that have never been digitized, often with multiple versions (base leases, amendments, riders) creating operational inefficiencies. This system automates lease abstraction using AI, reducing processing time from 4-8 hours per lease to under 15 seconds.
