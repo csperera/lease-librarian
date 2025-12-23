@@ -16,7 +16,7 @@ The production system includes:
 
 **© 2025 Christian Perera. All Rights Reserved.**
 
-For commercial licensing, collaboration, or technical discussions: christian@wealthmind.ai
+For commercial licensing, collaboration, or technical discussions: christianperera.ai@gmail.com
 
 ---
 ## 🎯 Overview
