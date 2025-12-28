@@ -4,7 +4,7 @@
 
 A production-grade full-stack application that uses LangChain multi-agent architecture to extract structured data from commercial real estate leases with 100% accuracy.
 
-[![Click To Watch Demo Video](https://img.shields.io/badge/▶️-Click%20To%20Watch%20Demo%20Video-red?style=for-the-badge&logo=youtube)]([https://youtu.be/KPWFwW-v5qU])
+[![Click To Watch Demo Video](https://img.shields.io/badge/▶️-Click%20To%20Watch%20Demo%20Video-red?style=for-the-badge&logo=youtube)]([https://youtu.be/KPWFwW-v5qU?si=HqZaWqVI2V_g-ldV])
 
 # ⚠️ IMPORTANT NOTICE
 
