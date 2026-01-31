@@ -14,54 +14,54 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                          FRONTEND LAYER                              │
-│                                                                       │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  React Dashboard (lease-digitizer-final.html)                │   │
-│  │  - Tailwind CSS styling                                      │   │
-│  │  - Three-panel layout (Library, Chat, Details)               │   │
-│  │  - Fetch API for HTTP requests                               │   │
-│  └─────────────────────────────────────────────────────────────┘   │
+│                          FRONTEND LAYER                             │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  React Dashboard (lease-digitizer-final.html)               │    │
+│  │  - Tailwind CSS styling                                     │    │
+│  │  - Three-panel layout (Library, Chat, Details)              │    │
+│  │  - Fetch API for HTTP requests                              │    │
+│  └─────────────────────────────────────────────────────────────┘    │
 └───────────────────────────────┬─────────────────────────────────────┘
                                 │ HTTP (Port 8001)
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                           API LAYER                                  │
-│                                                                       │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  FastAPI Router (src/api/main.py)                            │   │
-│  │                                                               │   │
-│  │  Endpoints:                                                   │   │
-│  │  - POST   /api/v1/leases/batch    (upload)                   │   │
-│  │  - GET    /api/v1/leases          (list all)                 │   │
-│  │  - GET    /api/v1/leases/{id}     (get details)              │   │
-│  │  - POST   /api/v1/chat            (chat query)               │   │
-│  │  - GET    /api/v1/health          (health check)             │   │
-│  └─────────────────────────────────────────────────────────────┘   │
+│                           API LAYER                                 │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  FastAPI Router (src/api/main.py)                           │    │
+│  │                                                             │    │
+│  │  Endpoints:                                                 │    │
+│  │  - POST   /api/v1/leases/batch    (upload)                  │    │
+│  │  - GET    /api/v1/leases          (list all)                │    │
+│  │  - GET    /api/v1/leases/{id}     (get details)             │    │
+│  │  - POST   /api/v1/chat            (chat query)              │    │
+│  │  - GET    /api/v1/health          (health check)            │    │
+│  └─────────────────────────────────────────────────────────────┘    │
 └───────────────────┬──────────────────┬──────────────────┬───────────┘
                     │                  │                  │
                     ▼                  ▼                  ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         SERVICE LAYER                                │
-│                                                                       │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐  │
-│  │  Lease Storage   │  │  Vector Store    │  │   AI Agents      │  │
-│  │                  │  │                  │  │                  │  │
-│  │  - JSON file     │  │  - FAISS index   │  │  1. Classifier   │  │
-│  │  - CRUD ops      │  │  - Embeddings    │  │  2. Extractor    │  │
-│  │  - Type safe     │  │  - Similarity    │  │  3. Librarian    │  │
-│  └──────────────────┘  └──────────────────┘  └──────────────────┘  │
+│                         SERVICE LAYER                               │
+│                                                                     │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐   │
+│  │  Lease Storage   │  │  Vector Store    │  │   AI Agents      │   │
+│  │                  │  │                  │  │                  │   │
+│  │  - JSON file     │  │  - FAISS index   │  │  1. Classifier   │   │
+│  │  - CRUD ops      │  │  - Embeddings    │  │  2. Extractor    │   │
+│  │  - Type safe     │  │  - Similarity    │  │  3. Librarian    │   │
+│  └──────────────────┘  └──────────────────┘  └──────────────────┘   │
 └───────────────────────────────────┬─────────────────────────────────┘
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                      EXTERNAL SERVICES                               │
-│                                                                       │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │  OpenAI API                                                   │   │
-│  │  - GPT-4 for extraction and chat                             │   │
-│  │  - text-embedding-ada-002 for vectors                        │   │
-│  └─────────────────────────────────────────────────────────────┘   │
+│                      EXTERNAL SERVICES                              │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  OpenAI API                                                 │    │
+│  │  - GPT-4 for extraction and chat                            │    │
+│  │  - text-embedding-ada-002 for vectors                       │    │
+│  └─────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
