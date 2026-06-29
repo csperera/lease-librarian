@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lease Librarian — Architecture</title>
+<style>
+  body { font-family: sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+  svg { max-width: 900px; display: block; margin: 0 auto; background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }
+  .node { cursor: pointer; }
+  .node:hover rect { opacity: 0.85; }
+  .node:hover { opacity: 0.9; }
+  #modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:100; }
+  #modal-box { background:white; max-width:560px; margin:60px auto; border-radius:10px; padding:28px 32px; position:relative; max-height:80vh; overflow-y:auto; }
+  #modal-title { font-size:15px; font-weight:600; color:#1a1a2e; margin-bottom:12px; }
+  #modal-body { font-size:13px; color:#333; line-height:1.7; white-space:pre-wrap; }
+  #modal-close { position:absolute; top:12px; right:16px; font-size:20px; cursor:pointer; color:#666; }
+</style>
+</head>
+<body>
+
+<div id="modal-overlay" onclick="closeModal()">
+  <div id="modal-box" onclick="event.stopPropagation()">
+    <span id="modal-close" onclick="closeModal()">✕</span>
+    <div id="modal-title"></div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+var info = {
+  layer1: {
+    title: "Layer 1 — Lease Ingestion",
+    body: `IN: Raw lease PDF or text — base leases, amendments, riders
+OUT: Raw document text string passed to Document Classifier
+
+How it works:
+• User uploads PDF via React frontend
+• POST /api/v1/leases/batch receives the file
+• pdfplumber extracts all text page by page — handles tables, multi-column layouts, mixed fonts
+• Output is a raw messy text string with Unicode artifacts and inconsistent spacing
+• Batch upload script (upload_demo_leases.py) supports bulk ingestion
+
+What pdfplumber output looks like:
+"LEASE AGREEMENT\n\nTHIS LEASE made as of the 1st day of January 2023\n\nBETWEEN:\n123 King Holdings Inc. (the Landlord)..."
+
+Why it is still usable:
+GPT-4o-mini handles messy text gracefully. The messiness that would break regex is exactly what the LLM handles.
+
+V1 to V2:
+• V1: manual upload via UI or batch script
+• V2: S3 event trigger + Airflow DAG for automated ingestion pipeline`
+  },
+  layer2: {
+    title: "Layer 2 — Agent 1: Document Classifier",
+    body: `src/agents/document_classifier.py
+
+IN: Raw document text string
+OUT: ClassificationResult { is_lease: bool, confidence: float, doc_type: str }
+
+How it works:
+• Regex + heuristics scan for lease keywords: Lessor, Lessee, Premises, Rent
+• Returns confidence score 0.0 to 1.0
+• Below threshold — reject immediately, no LLM call wasted
+
+What regex does:
+import re
+pattern = re.search(r'\\bLessor\\b|\\bLessee\\b|\\bPremises\\b', content)
+
+Why this exists:
+• Quality gate — fail fast before expensive GPT-4 call
+• Multiple keyword hits raise confidence, single hits do not
+• Extensible — add appraisals, loan files later
+
+The limitation:
+Regex finds exact pattern matches with no understanding of meaning.
+Confidence scoring exists to handle ambiguous matches.
+
+V1 to V2:
+• V1: regex/heuristics only
+• V2: lightweight ML classifier trained on document type corpus`
+  },
+  layer3: {
+    title: "Layer 3 — Agent 2: Lease Extractor",
+    body: `src/agents/lease_extractor.py
+
+IN: Confirmed lease text from Classifier
+OUT: Raw JSON string from GPT-4o-mini containing 15+ structured fields
+
+How it works:
+• Builds structured extraction prompt:
+  "You are a CRE expert. Extract these fields. Respond ONLY in valid JSON."
+• Sends confirmed lease text to GPT-4o-mini via OpenAI API
+• GPT-4o-mini returns raw JSON string
+• Handles: base leases, amendments, riders
+• Extracts: rent rolls, escalations, renewal options, guarantees, parking
+
+Example output:
+{
+  "tenant": "Starbucks Corporation",
+  "landlord": "123 King Holdings Inc.",
+  "property_address": "Suite 101, 123 King Street West, Toronto",
+  "rentable_square_feet": 2850,
+  "annual_rent": 125000.00,
+  "lease_rate_per_sf": 43.86,
+  "lease_commencement_date": "2023-01-01",
+  "lease_expiration_date": "2027-12-31",
+  "lease_term_months": 60,
+  "parking_spaces": 4,
+  "renewal_options": "One option to renew for five years at market rent"
+}
+
+Why LLM extraction vs regex:
+• Adapts to any lease format — no brittle template matching
+• Handles nuanced legal language regex cannot parse
+• 47 pages of messy text to clean JSON in one API call
+• This used to take 4-8 hours manually
+
+V1 to V2:
+• V1: GPT-4o-mini, single extraction pass
+• V2: Conflict Detector agent cross-references base lease vs amendments`
+  },
+  layer4: {
+    title: "Layer 4 — Schema Validation (Pydantic)",
+    body: `src/schemas/lease.py
+
+IN: Raw JSON string from GPT-4o-mini
+OUT: Validated, typed Lease object — or ValidationError
+
+Pydantic model fields:
+id, document_id, tenant, landlord, property_address, lease_type
+rentable_square_feet (int), annual_rent (float), lease_rate_per_sf (float)
+lease_commencement_date, lease_expiration_date, lease_term_months (int)
+parking_spaces (int), renewal_options, lease_summary, created_at
+
+What Pydantic does:
+lease = Lease(**json.loads(raw_json_string))
+
+• Enforces types at runtime: "2850" (string) → 2850 (int)
+• Type coercion where possible: "125000.00" → 125000.00 (float)
+• Optional fields do not fail the whole record
+• ValidationError catches bad data before it reaches storage
+
+Example failure caught:
+{"annual_rent": "not a number"} → ValidationError: value is not a valid float
+
+Why this matters:
+The LLM returns numbers wrapped in quotes.
+Without Pydantic this silently corrupts your data.
+The LLM is the processor. Pydantic is the contract.
+
+V1 to V2:
+• V1: basic type validation only
+• V2: confidence scores per field, range validators, business rule checks`
+  },
+  layer5a: {
+    title: "Layer 5a — Lease Storage (JSON)",
+    body: `src/storage/lease_storage.py
+
+IN: Validated Lease object
+OUT: Lease persisted to lease_store.json
+
+Storage format:
+{
+  "leases": {
+    "GS-11P-LDC00100": {
+      "tenant": "Starbucks Corporation",
+      "annual_rent": 125000.00,
+      "rentable_square_feet": 2850,
+      "lease_expiration_date": "2027-12-31",
+      ...
+    }
+  }
+}
+
+Methods: add_lease(), get_lease(), get_all_leases()
+
+Why JSON:
+• Human-readable and debuggable
+• Easy to inspect without a database client
+
+What it stores: all 15+ structured business fields
+What it does NOT do: semantic search — that is FAISS job
+
+V2 upgrade: PostgreSQL with proper indexing`
+  },
+  layer5b: {
+    title: "Layer 5b — Vector Store (FAISS)",
+    body: `src/storage/lease_vector_store.py
+
+IN: Validated Lease object
+OUT: Lease embedded as 1536-dim vector and indexed in FAISS
+
+How it works:
+1. Convert Lease to text representation:
+   "Tenant: Starbucks Corporation, Landlord: 123 King Holdings..."
+
+2. Send text to OpenAI text-embedding-ada-002:
+   vector = embeddings.embed_query(text)
+   Returns: [0.0023, -0.0187, 0.0341, ...] — 1536 numbers
+
+3. Add to FAISS index:
+   self.index.add(vector)       # adds 1536-dim vector
+   self.lease_ids.append(id)    # maps position to lease ID
+
+What FAISS actually stores:
+• A matrix of vectors — one row per lease, 1536 columns
+• A parallel list of lease IDs
+• Nothing else — no text, no fields, just numbers and IDs
+
+Why FAISS:
+• Searches millions of vectors in milliseconds using cosine similarity
+• Memory efficient for high-dimensional vectors
+
+FAISS knows what is similar. JSON knows what is there. Together they answer any question.
+
+V2: Pinecone or Weaviate for persistent vector storage`
+  },
+  layer6: {
+    title: "Layer 6 — Agent 3: Lease Librarian (RAG)",
+    body: `src/agents/lease_librarian.py
+
+IN: Natural language question + conversation_id
+OUT: Grounded answer + source lease IDs
+
+Example question: "Which leases expire before end of 2025 and have renewal options?"
+
+Step 1 — EMBED QUERY:
+query_vector = embeddings.embed_query(question)
+Returns: [0.0156, -0.0423, 0.0891, ...] 1536-dim vector
+
+Step 2 — RETRIEVE:
+distances, indices = self.index.search(query_vector, k=3)
+lease_ids: ["GS-11P-LDC00200", "GS-11P-LDC00100", "GS-11P-LDC00800"]
+Cosine similarity: sim = dot(A,B) / (||A|| x ||B||)
+
+Step 3 — AUGMENT:
+Fetch full Lease objects from JSON store by ID.
+Build context string with tenant, expiry, address, rate, renewal terms.
+
+Step 4 — GENERATE:
+Prompt: "Answer ONLY from context. Cite specific lease IDs."
+GPT-4 generates grounded answer with source attribution.
+
+Return: { response, sources: ["GS-11P-LDC00200", "GS-11P-LDC00800"], conversation_id }
+
+Key principle: GPT-4 correctly excludes Starbucks (expires 2027) even though FAISS retrieved it,
+because the LLM understands the time constraint. That is the intelligence layer doing its job.
+
+V2: hybrid search (dense + BM25 + RRF fusion) + Cohere reranker + streaming SSE`
+  },
+  layer7: {
+    title: "Layer 7 — API Layer (FastAPI)",
+    body: `src/api/main.py
+
+IN: HTTP requests from React frontend
+OUT: JSON HTTP responses
+
+FastAPI router on Port 8001. Uvicorn ASGI server. Async endpoints.
+
+Five endpoints:
+POST /api/v1/leases/batch  → triggers full Layers 1-5 upload pipeline
+GET  /api/v1/leases        → list all leases for Library panel
+GET  /api/v1/leases/{id}   → full lease detail for Details panel
+POST /api/v1/chat          → triggers Layer 6 RAG pipeline
+GET  /api/v1/health        → confirms system running
+
+On startup: initializes all services — Storage, VectorStore, all three Agents
+
+Upload response:
+{ "results": [{ "lease_id": "GS-11P-LDC00100", "status": "success" }] }
+
+Chat response:
+{ "response": "Two leases expire before 2025...", "sources": ["GS-11P-LDC00200"], "conversation_id": "abc123" }
+
+Key principle: The API is the single front door.
+The frontend never touches agents, storage, or vectors directly.
+Everything flows through Layer 7.
+
+V2: JWT tokens + RBAC (AWS Cognito), rate limiting, multi-tenant routing per lender`
+  },
+  layer8a: {
+    title: "Layer 8 — Library Panel",
+    body: `What it shows:
+• All uploaded leases listed with summary information
+• Tenant name, property address, expiry date, annual rent
+• Click any lease to load full detail in Details Panel
+• Upload button triggers POST /leases/batch
+
+Why it matters:
+This is the portfolio view. At a glance a lender can see every lease in their
+underwriting queue, its status, and when it expires.
+
+In production mortgage underwriting:
+A lender reviewing a multi-tenant office building might have 12 leases to abstract
+before approving the loan. The Library shows all 12, their status, and flags anything
+that needs review.`
+  },
+  layer8b: {
+    title: "Layer 8 — Chat Panel",
+    body: `What it shows:
+• Natural language Q&A interface
+• Type any question about the lease portfolio
+• Answer appears with source lease IDs cited below
+• Conversation history maintained within session
+
+Example questions:
+"Which leases expire before end of 2025 and have renewal options?"
+"What is the total annual rent for all retail tenants?"
+"Which tenant has the largest rentable area?"
+"Are there any leases with below-market renewal options?"
+
+Why it matters:
+This replaces the paralegal who spent hours manually reading every lease to answer
+these questions. The lender gets answers in seconds with citations to verify.
+
+The RAG principle in action:
+Every answer is grounded in actual lease data. GPT-4 cites specific lease IDs.
+No hallucination — if the answer is not in the data, the system says so.`
+  },
+  layer8c: {
+    title: "Layer 8 — Details Panel",
+    body: `What it shows:
+• Full extracted data for the selected lease
+• All 15+ structured fields displayed cleanly
+• tenant, landlord, address, sq ft, annual rent, rate per sf
+• commencement, expiration, term months, parking, renewal options
+• lease summary
+
+Why it matters:
+This is the deliverable. A lender reviewing a loan application needs exactly these
+fields to:
+• Verify tenant income (annual rent x lease term = total income stream)
+• Confirm occupancy (rentable sq ft, lease term)
+• Assess rollover risk (expiration date, renewal options)
+• Validate collateral (lease quality drives property value)
+
+In the old world: a paralegal reads a 200-page lease and manually fills in these
+fields. 4-8 hours.
+
+In Lease Librarian: 15 seconds.
+
+This is where the domain pain becomes the product value.
+I used to do this manually as an Investment Sales Associate at Colliers.`
+  }
+};
+
+function showInfo(key) {
+  document.getElementById("modal-title").textContent = info[key].title;
+  document.getElementById("modal-body").textContent = info[key].body;
+  document.getElementById("modal-overlay").style.display = "block";
+}
+
+function closeModal() {
+  document.getElementById("modal-overlay").style.display = "none";
+}
+</script>
+
+<svg viewBox="0 0 680 1100" role="img" xmlns="http://www.w3.org/2000/svg">
+<title>Lease Librarian — 8-Layer Architecture</title>
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+<path d="M2 1L8 5L2 9" fill="none" stroke="#666" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</marker>
+</defs>
+
+<!-- Header -->
+<rect x="40" y="14" width="600" height="52" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text font-size="14" font-weight="500" fill="#3C3489" x="340" y="36" text-anchor="middle" dominant-baseline="central">Lease Librarian — 3-Agent Intelligence Pipeline</text>
+<text font-size="12" fill="#534AB7" x="340" y="54" text-anchor="middle" dominant-baseline="central">Production CRE lease abstraction · "4-8 hours of manual work → 15 seconds"</text>
+
+<!-- LAYER 1 -->
+<text font-size="12" fill="#555" x="40" y="88" dominant-baseline="central">Layer 1 — Lease Ingestion</text>
+<g class="node" onclick="showInfo('layer1')">
+<rect x="40" y="100" width="600" height="56" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text font-size="14" font-weight="500" fill="#085041" x="340" y="122" text-anchor="middle" dominant-baseline="central">PDF upload → pdfplumber extraction</text>
+<text font-size="12" fill="#0F6E56" x="340" y="140" text-anchor="middle" dominant-baseline="central">Raw lease PDF in · raw text string out · batch upload supported</text>
+</g>
+
+<line x1="340" y1="156" x2="340" y2="178" stroke="#666" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- LAYER 2 -->
+<text font-size="12" fill="#555" x="40" y="190" dominant-baseline="central">Layer 2 — Agent 1: Document Classifier</text>
+<g class="node" onclick="showInfo('layer2')">
+<rect x="40" y="202" width="600" height="56" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text font-size="14" font-weight="500" fill="#085041" x="340" y="224" text-anchor="middle" dominant-baseline="central">Regex + heuristics keyword scan</text>
+<text font-size="12" fill="#0F6E56" x="340" y="242" text-anchor="middle" dominant-baseline="central">Lessor · Lessee · Premises · Rent → confidence 0.0–1.0 · fail fast below threshold</text>
+</g>
+
+<line x1="340" y1="258" x2="340" y2="280" stroke="#666" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- LAYER 3 -->
+<text font-size="12" fill="#555" x="40" y="292" dominant-baseline="central">Layer 3 — Agent 2: Lease Extractor</text>
+<g class="node" onclick="showInfo('layer3')">
+<rect x="40" y="304" width="600" height="56" rx="6" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+<text font-size="14" font-weight="500" fill="#085041" x="340" y="326" text-anchor="middle" dominant-baseline="central">GPT-4o-mini extraction prompt → raw JSON string</text>
+<text font-size="12" fill="#0F6E56" x="340" y="344" text-anchor="middle" dominant-baseline="central">15+ fields extracted · rent rolls · escalations · renewal options · guarantees</text>
+</g>
+
+<line x1="340" y1="360" x2="340" y2="382" stroke="#666" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- LAYER 4 -->
+<text font-size="12" fill="#555" x="40" y="394" dominant-baseline="central">Layer 4 — Schema Validation (Pydantic)</text>
+<g class="node" onclick="showInfo('layer4')">
+<rect x="40" y="406" width="600" height="56" rx="6" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text font-size="14" font-weight="500" fill="#3C3489" x="340" y="428" text-anchor="middle" dominant-baseline="central">Pydantic type enforcement and validation gate</text>
+<text font-size="12" fill="#534AB7" x="340" y="446" text-anchor="middle" dominant-baseline="central">"2850" → 2850 (int) · "not a number" → ValidationError · Optional fields safe</text>
+</g>
+
+<line x1="340" y1="462" x2="340" y2="484" stroke="#666" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- LAYER 5 -->
+<text font-size="12" fill="#555" x="40" y="496" dominant-baseline="central">Layer 5 — Storage Layer (two stores written simultaneously)</text>
+
+<g class="node" onclick="showInfo('layer5a')">
+<rect x="40" y="508" width="290" height="76" rx="6" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text font-size="14" font-weight="500" fill="#2C2C2A" x="185" y="530" text-anchor="middle" dominant-baseline="central">Lease Storage (JSON)</text>
+<text font-size="12" fill="#5F5E5A" x="185" y="548" text-anchor="middle" dominant-baseline="central">lease_store.json · all 15+ fields</text>
+<text font-size="12" fill="#5F5E5A" x="185" y="565" text-anchor="middle" dominant-baseline="central">CRUD · type-safe · human-readable</text>
+<text font-size="12" fill="#5F5E5A" x="185" y="578" text-anchor="middle" dominant-baseline="central">V2: PostgreSQL</text>
+</g>
+
+<g class="node" onclick="showInfo('layer5b')">
+<rect x="350" y="508" width="290" height="76" rx="6" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text font-size="14" font-weight="500" fill="#2C2C2A" x="495" y="530" text-anchor="middle" dominant-baseline="central">Vector Store (FAISS)</text>
+<text font-size="12" fill="#5F5E5A" x="495" y="548" text-anchor="middle" dominant-baseline="central">ada-002 embeddings · 1536-dim vectors</text>
+<text font-size="12" fill="#5F5E5A" x="495" y="565" text-anchor="middle" dominant-baseline="central">In-memory index · cosine similarity</text>
+<text font-size="12" fill="#5F5E5A" x="495" y="578" text-anchor="middle" dominant-baseline="central">V2: Pinecone / Weaviate</text>
+</g>
+
+<line x1="340" y1="584" x2="340" y2="606" stroke="#666" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- LAYER 6 -->
+<text font-size="12" fill="#555" x="40" y="618" dominant-baseline="central">Layer 6 — Agent 3: Lease Librarian (RAG)</text>
+<g class="node" onclick="showInfo('layer6')">
+<rect x="40" y="630" width="600" height="76" rx="6" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text font-size="14" font-weight="500" fill="#0C447C" x="340" y="652" text-anchor="middle" dominant-baseline="central">Four-step RAG pipeline</text>
+<text font-size="12" fill="#185FA5" x="340" y="670" text-anchor="middle" dominant-baseline="central">Step 1: Embed query (ada-002) · Step 2: FAISS cosine search → top K lease IDs</text>
+<text font-size="12" fill="#185FA5" x="340" y="685" text-anchor="middle" dominant-baseline="central">Step 3: Fetch full lease objects + build context · Step 4: GPT-4 generates grounded answer</text>
+<text font-size="12" fill="#185FA5" x="340" y="700" text-anchor="middle" dominant-baseline="central">"Answer ONLY from context. Cite specific lease IDs." — zero hallucination</text>
+</g>
+
+<line x1="340" y1="706" x2="340" y2="728" stroke="#666" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- LAYER 7 -->
+<text font-size="12" fill="#555" x="40" y="740" dominant-baseline="central">Layer 7 — API Layer (FastAPI)</text>
+<g class="node" onclick="showInfo('layer7')">
+<rect x="40" y="752" width="600" height="56" rx="6" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+<text font-size="14" font-weight="500" fill="#2C2C2A" x="340" y="774" text-anchor="middle" dominant-baseline="central">FastAPI orchestration — single front door to the system</text>
+<text font-size="12" fill="#5F5E5A" x="340" y="792" text-anchor="middle" dominant-baseline="central">POST /leases/batch · GET /leases · GET /leases/{id} · POST /chat · GET /health</text>
+</g>
+
+<line x1="340" y1="808" x2="340" y2="830" stroke="#666" stroke-width="1" marker-end="url(#arrow)"/>
+
+<!-- LAYER 8 -->
+<text font-size="12" fill="#555" x="40" y="842" dominant-baseline="central">Layer 8 — Frontend (React · Tailwind · Three-panel layout)</text>
+
+<g class="node" onclick="showInfo('layer8a')">
+<rect x="40" y="854" width="183" height="66" rx="6" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+<text font-size="14" font-weight="500" fill="#712B13" x="131" y="876" text-anchor="middle" dominant-baseline="central">Library Panel</text>
+<text font-size="12" fill="#993C1D" x="131" y="894" text-anchor="middle" dominant-baseline="central">All leases listed</text>
+<text font-size="12" fill="#993C1D" x="131" y="909" text-anchor="middle" dominant-baseline="central">Upload · browse · select</text>
+</g>
+
+<g class="node" onclick="showInfo('layer8b')">
+<rect x="233" y="854" width="183" height="66" rx="6" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+<text font-size="14" font-weight="500" fill="#712B13" x="324" y="876" text-anchor="middle" dominant-baseline="central">Chat Panel</text>
+<text font-size="12" fill="#993C1D" x="324" y="894" text-anchor="middle" dominant-baseline="central">Natural language Q&amp;A</text>
+<text font-size="12" fill="#993C1D" x="324" y="909" text-anchor="middle" dominant-baseline="central">Source citations returned</text>
+</g>
+
+<g class="node" onclick="showInfo('layer8c')">
+<rect x="426" y="854" width="214" height="66" rx="6" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+<text font-size="14" font-weight="500" fill="#712B13" x="533" y="876" text-anchor="middle" dominant-baseline="central">Details Panel</text>
+<text font-size="12" fill="#993C1D" x="533" y="894" text-anchor="middle" dominant-baseline="central">Full extracted lease data</text>
+<text font-size="12" fill="#993C1D" x="533" y="909" text-anchor="middle" dominant-baseline="central">All 15+ fields displayed</text>
+</g>
+
+<!-- Tech stack -->
+<rect x="40" y="940" width="600" height="44" rx="6" fill="#E6F1FB" stroke="#185FA5" stroke-width="0.5"/>
+<text font-size="14" font-weight="500" fill="#0C447C" x="340" y="957" text-anchor="middle" dominant-baseline="central">Tech Stack</text>
+<text font-size="12" fill="#185FA5" x="340" y="975" text-anchor="middle" dominant-baseline="central">Python · FastAPI · LangChain · GPT-4o-mini (extraction) · GPT-4 (chat) · ada-002 · FAISS · React · Tailwind</text>
+
+<!-- Footer -->
+<text font-size="12" fill="#888" x="340" y="1022" text-anchor="middle">Upload flow: PDF → Layer 1 → 2 → 3 → 4 → 5 → 7 → 8</text>
+<text font-size="12" fill="#888" x="340" y="1040" text-anchor="middle">Query flow: Question → Layer 8 → 7 → 6 → 5 (retrieve) → 7 → 8</text>
+<text font-size="12" fill="#888" x="340" y="1058" text-anchor="middle">Click any layer to learn more · "4-8 hours → 15 seconds"</text>
+
+</svg>
+</body>
+</html>

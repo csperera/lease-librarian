@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lease Librarian</title>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.9/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com/3.4.1"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body { 
@@ -35,7 +35,7 @@
 <body>
     <div id="root"></div>
 
-    <script type="text/babel">
+    <script type="text/babel" data-presets="react">
         const { useState, useEffect, useRef } = React;
 
         function LeaseDigitizerV2() {
@@ -366,7 +366,7 @@
                                                 </div>
                                             </div>
 
-                                            {/* Premises (formerly Property) */}
+                                            {/* Premises */}
                                             <div className="bg-white border border-[#E5E7EB] rounded-lg p-2.5 shadow-sm">
                                                 <h3 className="font-semibold text-[#0F3D5C] mb-3 flex items-center gap-2">
                                                     🏢 Premises
@@ -398,7 +398,7 @@
                                                 </div>
                                             </div>
 
-                                            {/* Financial Terms - REORDERED */}
+                                            {/* Financial Terms */}
                                             <div className="bg-white border border-[#E5E7EB] rounded-lg p-2.5 shadow-sm">
                                                 <h3 className="font-semibold text-[#0F3D5C] mb-3 flex items-center gap-2">
                                                     💰 Financial Terms
@@ -431,7 +431,7 @@
                                                 </div>
                                             </div>
 
-                                            {/* Lease Terms - EXPANDED */}
+                                            {/* Lease Terms */}
                                             <div className="bg-white border border-[#E5E7EB] rounded-lg p-2.5 shadow-sm">
                                                 <h3 className="font-semibold text-[#0F3D5C] mb-3 flex items-center gap-2">
                                                     📅 Lease Terms
@@ -495,7 +495,7 @@
                                             </div>
                                         </div>
 
-                                        {/* Comments Section - 2 COLUMNS WIDE */}
+                                        {/* Comments Section */}
                                         <div className="col-span-2 bg-white border border-[#E5E7EB] rounded-lg p-2.5 shadow-sm">
                                             <h3 className="font-semibold text-[#0F3D5C] mb-3 flex items-center gap-2">
                                                 💬 Comments
